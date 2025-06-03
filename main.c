@@ -23,6 +23,20 @@ int main (int argc, char *argv[]) {
         printf("Error: Invalid operation mode specified. Use -d for distribution or -r for recovery.\n");
         return 1;
     }
+    int k = atoi(arguments[1]);
+
+    int n;
+    if (strlen(arguments) > 2) {
+        n = atoi(arguments[2]);
+    } else {
+        //TODO: Hacer que si no le paso el "n", le asigne  la cantidad total de imágene del directorio
+        n = 0; // Default value if not provided
+    }
+
+    if (k <= 0) {
+        printf("Error: The value of k must be a positive integer.\n");
+        return 1;
+    }
 
     char** arguments = process_arguments(argc, argv);
 
@@ -39,6 +53,12 @@ int main (int argc, char *argv[]) {
     fread(&width, sizeof(int32_t), 1, original_image);
     fread(&height, sizeof(int32_t), 1, original_image);
 
+    if (k == 8){
+        if (width != height)
+            printf("Error: The image must be square for k=8.\n");
+            return 1;
+    }
+
     //Defino la seed para luego poder reconstruir la matriz
     setSeed(SEED);
 
@@ -50,6 +70,9 @@ int main (int argc, char *argv[]) {
     unsigned char** permutation_matrix = create_permutation_matrix(height, width);
 
     unsigned char** randomized_image = randomize_image(original_image,permutation_matrix,offset,height, width);
+
+    unsigned char pixels[] = calculate_pixels(randomized_image, k, n);
+
 
     return 0;
 

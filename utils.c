@@ -44,6 +44,7 @@ unsigned char** create_permutation_matrix(int rows,int cols){
 unsigned char** randomize_image(FILE* original_image,unsigned char** permutation_matrix,int32_t offset,int rows, int cols){
     // Avanzo hasta donde comienzan los bytes de la imagen
     fseek(original_image,offset,SEEK_SET);
+
     unsigned char pixel ;
     unsigned char ** randomized_image = malloc(rows * sizeof (unsigned char *));
     for (int i = 0; i < rows ; ++i) {
@@ -56,4 +57,15 @@ unsigned char** randomize_image(FILE* original_image,unsigned char** permutation
         }
     }
     return randomized_image;
+}
+
+unsigned char * calculate_pixels(unsigned char** randomized_image, int k, int n){
+    unsigned char pixel;
+    unsigned char * pixels = malloc(n * sizeof(unsigned char));
+    for (int i = 0; i < k; i++){
+        fread(&pixel, sizeof(unsigned char), 1, randomized_image);
+        pixels[i] = pixel;
+        fseek(randomized_image, sizeof(unsigned char), SEEK_CUR);
+    }
+
 }
