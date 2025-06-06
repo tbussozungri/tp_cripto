@@ -6,8 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
-#include "utils.h"
-#include "secret_sharing.h"
+#include "include/secret_sharing.h"
 
 #define SEED 43
 
