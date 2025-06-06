@@ -1,0 +1,23 @@
+# Compiled binary
+visualSSS
+
+# Object files
+*.o
+
+# Editor/IDE files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+.DS_Store
+
+# Test images and outputs
+test_images/
+*.bmp
+
+# Backup files
+*.bak
+
+# OS generated files
+Thumbs.db 
