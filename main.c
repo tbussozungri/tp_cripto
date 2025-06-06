@@ -7,73 +7,61 @@
 #include <stdlib.h>
 #include <time.h>
 #include "utils.h"
+#include "secret_sharing.h"
 
 #define SEED 43
 
-int main (int argc, char *argv[]) {
+void print_usage(const char* program_name) {
+    printf("Usage: %s [-d|-r] -secret <image> -k <number> [-n <number>] [-dir <directory>]\n", program_name);
+    printf("  -d: distribute secret image\n");
+    printf("  -r: recover secret image\n");
+    printf("  -secret: input/output image file (.bmp)\n");
+    printf("  -k: minimum number of shares needed (2-10)\n");
+    printf("  -n: total number of shares (optional)\n");
+    printf("  -dir: directory for input/output files (optional, default: current directory)\n");
+}
 
-    // Indicates the operation mode (distribution or recovery)
-    int distribution_mode = 0;
-
-    if (strcmp(argv[1],"-d") == 0)
-        distribution_mode = 1;
-    else if (strcmp(argv[1],"-r") == 0)
-        distribution_mode = 0;
-    else{
-        printf("Error: Invalid operation mode specified. Use -d for distribution or -r for recovery.\n");
+int main(int argc, char* argv[]) {
+    if (argc < 4) {
+        print_usage(argv[0]);
         return 1;
     }
-    int k = atoi(arguments[1]);
 
-    int n;
-    if (strlen(arguments) > 2) {
-        n = atoi(arguments[2]);
+    char* secret_image = NULL;
+    int k = 0;
+    int n = 0;
+    char* directory = ".";
+    int mode = 0; // 0: undefined, 1: distribute, 2: recover
+
+    // Parse command line arguments
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-d") == 0) {
+            mode = 1;
+        } else if (strcmp(argv[i], "-r") == 0) {
+            mode = 2;
+        } else if (strcmp(argv[i], "-secret") == 0 && i + 1 < argc) {
+            secret_image = argv[++i];
+        } else if (strcmp(argv[i], "-k") == 0 && i + 1 < argc) {
+            k = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
+            n = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "-dir") == 0 && i + 1 < argc) {
+            directory = argv[++i];
+        }
+    }
+
+    // Validate required parameters
+    if (mode == 0 || secret_image == NULL || k < 2 || k > 10) {
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    // Execute the appropriate mode
+    if (mode == 1) {
+        distribute_secret(secret_image, k, n, directory);
     } else {
-        //TODO: Hacer que si no le paso el "n", le asigne  la cantidad total de imágene del directorio
-        n = 0; // Default value if not provided
+        recover_secret(secret_image, k, n, directory);
     }
-
-    if (k <= 0) {
-        printf("Error: The value of k must be a positive integer.\n");
-        return 1;
-    }
-
-    char** arguments = process_arguments(argc, argv);
-
-    FILE *original_image = NULL;
-    if (distribution_mode){
-        original_image = fopen(arguments[0], "rb");
-    }
-
-    // Obtenemos el alto y ancho de la imagen, para conocer la cantidad total de píxeles
-    fseek(original_image, 18, SEEK_SET);
-    int32_t width = 0;
-    int32_t height = 0;
-
-    fread(&width, sizeof(int32_t), 1, original_image);
-    fread(&height, sizeof(int32_t), 1, original_image);
-
-    if (k == 8){
-        if (width != height)
-            printf("Error: The image must be square for k=8.\n");
-            return 1;
-    }
-
-    //Defino la seed para luego poder reconstruir la matriz
-    setSeed(SEED);
-
-    //Obtengo el offset para saber donde comienza la imagen
-    fseek(original_image,10,SEEK_SET);
-    int32_t offset = 0;
-    fread(&offset, sizeof (int32_t),1,original_image);
-
-    unsigned char** permutation_matrix = create_permutation_matrix(height, width);
-
-    unsigned char** randomized_image = randomize_image(original_image,permutation_matrix,offset,height, width);
-
-    unsigned char pixels[] = calculate_pixels(randomized_image, k, n);
-
 
     return 0;
-
 }
