@@ -32,47 +32,61 @@ int modinv(int a, int p) {
     return 1; // Should not happen for valid input
 }
 
-// Interpolate polynomial coefficients in GF(257)
-void interpolate_polynomial(uint8_t* x_values, uint8_t* y_values, int k, uint8_t* coefficients) {
-    int p = 257;
-    if (k == 2) {
-        int x1 = x_values[0], x2 = x_values[1];
-        int y1 = y_values[0], y2 = y_values[1];
-        int denom = (x1 - x2 + p) % p;
-        int denom_inv = modinv(denom, p);
-        int a1 = ((y1 - y2 + p) % p) * denom_inv % p;
-        int a0 = (y1 - a1 * x1 + p * p) % p;
-        coefficients[0] = a0;
-        coefficients[1] = a1;
-        return;
-    }
-    // For k > 2, use Gaussian elimination
-    int mat[10][10]; // max k=10
-    int vec[10];
-    for (int i = 0; i < k; i++) {
-        int x = 1;
-        for (int j = 0; j < k; j++) {
-            mat[i][j] = x;
-            x = (x * x_values[i]) % p;
+// Función para calcular el inverso multiplicativo en módulo 257
+static uint8_t mod_inverse(uint8_t a) {
+    a = a % 257;
+    for (uint8_t x = 1; x < 257; x++) {
+        if (((a * x) % 257) == 1) {
+            return x;
         }
-        vec[i] = y_values[i];
     }
-    // Gaussian elimination
+    return 1; // Nunca debería llegar aquí si a es válido
+}
+
+// Función para calcular (a * b) mod 257
+static uint8_t mod_multiply(uint8_t a, uint8_t b) {
+    return ((uint16_t)a * (uint16_t)b) % 257;
+}
+
+// Función para calcular (a + b) mod 257
+static uint8_t mod_add(uint8_t a, uint8_t b) {
+    return (a + b) % 257;
+}
+
+// Función para calcular (a - b) mod 257
+static uint8_t mod_subtract(uint8_t a, uint8_t b) {
+    return (a + 257 - b) % 257;
+}
+
+void interpolate_polynomial(const uint8_t* x_values, const uint8_t* y_values, int k, uint8_t* coefficients) {
+    // Inicializar coeficientes a cero
     for (int i = 0; i < k; i++) {
-        int inv = modinv(mat[i][i], p);
-        for (int j = i; j < k; j++) mat[i][j] = (mat[i][j] * inv) % p;
-        vec[i] = (vec[i] * inv) % p;
+        coefficients[i] = 0;
+    }
+
+    // Para cada punto
+    for (int i = 0; i < k; i++) {
+        uint8_t numerator = 1;
+        uint8_t denominator = 1;
+        
+        // Calcular el término base del polinomio de Lagrange
         for (int j = 0; j < k; j++) {
-            if (j != i) {
-                int factor = mat[j][i];
-                for (int l = i; l < k; l++) {
-                    mat[j][l] = (mat[j][l] - factor * mat[i][l] + p * p) % p;
-                }
-                vec[j] = (vec[j] - factor * vec[i] + p * p) % p;
+            if (i != j) {
+                numerator = mod_multiply(numerator, mod_subtract(x_values[j], 0));
+                denominator = mod_multiply(denominator, mod_subtract(x_values[i], x_values[j]));
             }
         }
+
+        // Calcular el inverso del denominador
+        uint8_t inv_denominator = mod_inverse(denominator);
+        
+        // Calcular el coeficiente de Lagrange
+        uint8_t lagrange_coef = mod_multiply(numerator, inv_denominator);
+        lagrange_coef = mod_multiply(lagrange_coef, y_values[i]);
+
+        // Acumular el resultado en el coeficiente constante
+        coefficients[0] = mod_add(coefficients[0], lagrange_coef);
     }
-    for (int i = 0; i < k; i++) coefficients[i] = (vec[i] + p) % p;
 }
 
 // Permutation table functions
@@ -330,13 +344,6 @@ void recover_secret(const char* carrier_images[], const char* output_image, int 
         return;
     }
 
-    // Validate image format
-    if (first_carrier->info_header.bits_per_pixel != 8) {
-        printf("Error: Carrier images must be 8-bit grayscale\n");
-        free_bmp_image(first_carrier);
-        return;
-    }
-
     size_t shadow_size = first_carrier->size;
     uint8_t** shadows = (uint8_t**)malloc(k * sizeof(uint8_t*));
     if (!shadows) {
@@ -360,13 +367,6 @@ void recover_secret(const char* carrier_images[], const char* output_image, int 
         BMPImage* carrier = read_bmp_image(carrier_images[i]);
         if (!carrier) {
             printf("Error: Could not read carrier image %d: %s\n", i + 1, carrier_images[i]);
-            goto cleanup;
-        }
-
-        // Validate carrier image format
-        if (carrier->info_header.bits_per_pixel != 8) {
-            printf("Error: Carrier image %d must be 8-bit grayscale\n", i + 1);
-            free_bmp_image(carrier);
             goto cleanup;
         }
 
@@ -428,12 +428,29 @@ void recover_secret(const char* carrier_images[], const char* output_image, int 
         goto cleanup;
     }
 
-    output->header = first_carrier->header;
-    output->info_header = first_carrier->info_header;
+    // Copy header and info header
+    memcpy(&output->header, &first_carrier->header, sizeof(BMPHeader));
+    memcpy(&output->info_header, &first_carrier->info_header, sizeof(BMPInfoHeader));
+    
+    // Copy palette if it exists
+    if (first_carrier->palette) {
+        output->palette = (uint8_t*)malloc(first_carrier->palette_size);
+        if (!output->palette) {
+            printf("Error: Memory allocation failed for palette\n");
+            free(perm_table);
+            free(recovered_data);
+            free(output);
+            goto cleanup;
+        }
+        memcpy(output->palette, first_carrier->palette, first_carrier->palette_size);
+        output->palette_size = first_carrier->palette_size;
+    } else {
+        output->palette = NULL;
+        output->palette_size = 0;
+    }
+
     output->data = recovered_data;
     output->size = shadow_size;
-    output->palette = first_carrier->palette;
-    output->palette_size = first_carrier->palette_size;
 
     // Save recovered image
     write_bmp_image(output, output_image);

@@ -56,7 +56,7 @@ void print_bmp_info(BMPHeader* header, BMPInfoHeader* info_header);
 // Modular arithmetic functions
 uint8_t mod_257(int32_t x);
 uint8_t evaluate_polynomial(uint8_t* coefficients, int k, uint8_t x);
-void interpolate_polynomial(uint8_t* x_values, uint8_t* y_values, int k, uint8_t* coefficients);
+void interpolate_polynomial(const uint8_t* x_values, const uint8_t* y_values, int k, uint8_t* coefficients);
 
 // Permutation table functions
 void setSeed(int64_t s);
