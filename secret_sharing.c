@@ -146,310 +146,316 @@ uint16_t read_seed_from_header(BMPHeader* header) {
     return header->reserved1;
 }
 
-// Secret sharing functions
-void distribute_secret(const char* secret_image, int k, int n, const char* directory) {
-    FILE* secret_file = fopen(secret_image, "rb");
-    if (!secret_file) {
-        printf("Error: Could not open secret image file\n");
-        return;
+// New steganography functions
+BMPImage* read_bmp_image(const char* filename) {
+    FILE* file = fopen(filename, "rb");
+    if (!file) return NULL;
+
+    BMPImage* image = (BMPImage*)malloc(sizeof(BMPImage));
+    if (!image) {
+        fclose(file);
+        return NULL;
     }
 
-    BMPHeader header;
-    BMPInfoHeader info_header;
-    if (!read_bmp_header(secret_file, &header, &info_header)) {
-        printf("Error: Invalid BMP file\n");
-        fclose(secret_file);
-        return;
+    if (!read_bmp_header(file, &image->header, &image->info_header)) {
+        free(image);
+        fclose(file);
+        return NULL;
     }
 
-    if (info_header.bits_per_pixel != 8) {
-        printf("Error: Image must be 8-bit grayscale\n");
-        fclose(secret_file);
-        return;
+    // Read palette for 8-bit images
+    image->palette_size = image->header.data_offset - sizeof(BMPHeader) - sizeof(BMPInfoHeader);
+    image->palette = (uint8_t*)malloc(image->palette_size);
+    if (!image->palette) {
+        free(image);
+        fclose(file);
+        return NULL;
     }
+    fread(image->palette, 1, image->palette_size, file);
 
-    int original_width = info_header.width;
-    int original_height = info_header.height;
-    size_t image_size = original_width * original_height;
-    size_t section_count = (image_size + k - 1) / k;
-    int shadow_height = (int)ceil((double)original_height / k);
-    size_t shadow_size = original_width * shadow_height;
-
-    uint8_t* image_data = (uint8_t*)malloc(image_size);
-    if (!image_data) {
-        printf("Error: Memory allocation failed\n");
-        fclose(secret_file);
-        return;
+    // Read image data
+    image->size = image->info_header.width * image->info_header.height;
+    image->data = (uint8_t*)malloc(image->size);
+    if (!image->data) {
+        free(image->palette);
+        free(image);
+        fclose(file);
+        return NULL;
     }
+    fread(image->data, 1, image->size, file);
 
-    fseek(secret_file, header.data_offset, SEEK_SET);
-    if (fread(image_data, 1, image_size, secret_file) != image_size) {
-        printf("Error: Failed to read image data\n");
-        free(image_data);
-        fclose(secret_file);
-        return;
-    }
-
-    // Read the palette (assume 8-bit BMP, palette is 1024 bytes after header)
-    size_t palette_size = header.data_offset - sizeof(BMPHeader) - sizeof(BMPInfoHeader);
-    uint8_t* palette = malloc(palette_size);
-    fseek(secret_file, sizeof(BMPHeader) + sizeof(BMPInfoHeader), SEEK_SET);
-    fread(palette, 1, palette_size, secret_file);
-
-    srand(time(NULL));
-    uint16_t seed_value = (uint16_t)(rand() & 0xFFFF);
-    uint8_t* perm_table = generate_permutation_table(seed_value, image_size);
-    if (!perm_table) {
-        printf("Error: Failed to generate permutation table\n");
-        free(image_data);
-        free(palette);
-        fclose(secret_file);
-        return;
-    }
-
-    for (size_t i = 0; i < image_size; i++) {
-        image_data[i] ^= perm_table[i];
-    }
-
-    // Debug: Print first 16 bytes of image data after permutation
-    printf("Permuted image data (first 16 bytes): ");
-    for (int b = 0; b < 16 && b < image_size; b++) {
-        printf("%02X ", image_data[b]);
-    }
-    printf("\n");
-
-    uint8_t** shadows = malloc(n * sizeof(uint8_t*));
-    for (int i = 0; i < n; i++) {
-        shadows[i] = calloc(shadow_size, 1);
-    }
-
-    // Fill shadow data row by row
-    size_t sec = 0;
-    int debug_sections = 0;
-    for (int row = 0; row < shadow_height; row++) {
-        for (int col = 0; col < original_width; col++) {
-            if (sec >= section_count) break;
-            uint8_t section[k];
-            for (int m = 0; m < k; m++) {
-                size_t idx = sec * k + m;
-                section[m] = (idx < image_size) ? image_data[idx] : 0;
-            }
-            // Debug: Print first section
-            if (sec == 0) {
-                printf("First section: ");
-                for (int m = 0; m < k; m++) printf("%02X ", section[m]);
-                printf("\n");
-            }
-            for (int s = 0; s < n; s++) {
-                uint8_t val = evaluate_polynomial(section, k, s + 1);
-                shadows[s][row * original_width + col] = val;
-                // Debug: Print polynomial result for first 3 sections
-                if (sec < 3) {
-                    printf("Section %zu, Shadow %d: poly = %02X\n", sec, s+1, val);
-                }
-            }
-            sec++;
-        }
-    }
-
-    for (int i = 0; i < n; i++) {
-        char shadow_name[256];
-        snprintf(shadow_name, sizeof(shadow_name), "%s/shadow_%d.bmp", directory, i + 1);
-        FILE* shadow_file = fopen(shadow_name, "wb");
-        if (!shadow_file) {
-            printf("Error: Could not create shadow image %d\n", i + 1);
-            continue;
-        }
-        BMPHeader shadow_header = header;
-        BMPInfoHeader shadow_info = info_header;
-        shadow_info.height = shadow_height;
-        shadow_info.image_size = shadow_size;
-        shadow_header.file_size = header.data_offset + shadow_size;
-        write_seed_to_header(&shadow_header, seed_value);
-        if (!write_bmp_header(shadow_file, &shadow_header, &shadow_info)) {
-            printf("Error: Failed to write shadow image header %d\n", i + 1);
-            fclose(shadow_file);
-            continue;
-        }
-        // Write the palette
-        fwrite(palette, 1, palette_size, shadow_file);
-        fseek(shadow_file, shadow_header.data_offset, SEEK_SET);
-        fwrite(shadows[i], 1, shadow_size, shadow_file);
-        fclose(shadow_file);
-        printf("Shadow %d BMP Header: file_size=%u, data_offset=%u, width=%d, height=%d, bpp=%d\n",
-            i+1, shadow_header.file_size, shadow_header.data_offset, shadow_info.width, shadow_info.height, shadow_info.bits_per_pixel);
-        printf("Shadow %d first 16 bytes: ", i+1);
-        for (int b = 0; b < 16 && b < shadow_size; b++) {
-            printf("%02X ", shadows[i][b]);
-        }
-        printf("\n");
-    }
-    for (int i = 0; i < n; i++) free(shadows[i]);
-    free(shadows);
-    free(image_data);
-    free(perm_table);
-    free(palette);
-    fclose(secret_file);
+    fclose(file);
+    return image;
 }
 
-void recover_secret(const char* output_image, int k, int n, const char* directory) {
-    char shadow_names[10][256];
-    int found_shadows = 0;
-    for (int i = 0; i < n && found_shadows < k; i++) {
-        char shadow_name[256];
-        snprintf(shadow_name, sizeof(shadow_name), "%s/shadow_%d.bmp", directory, i + 1);
-        FILE* shadow_file = fopen(shadow_name, "rb");
-        if (shadow_file) {
-            strcpy(shadow_names[found_shadows], shadow_name);
-            found_shadows++;
-            fclose(shadow_file);
+void write_bmp_image(BMPImage* image, const char* filename) {
+    FILE* file = fopen(filename, "wb");
+    if (!file) return;
+
+    write_bmp_header(file, &image->header, &image->info_header);
+    fwrite(image->palette, 1, image->palette_size, file);
+    fwrite(image->data, 1, image->size, file);
+
+    fclose(file);
+}
+
+void hide_shadow_in_carrier(BMPImage* carrier, uint8_t* shadow, size_t shadow_size, int k) {
+    if (k == 8) {
+        // For k=8, use LSB replacement
+        // Each shadow bit is hidden in the LSB of each carrier byte
+        for (size_t i = 0; i < shadow_size; i++) {
+            carrier->data[i] = (carrier->data[i] & 0xFE) | (shadow[i] & 0x01);
+        }
+    } else {
+        // For k!=8, use a custom method
+        // In this case, we'll use the 2 least significant bits
+        // This allows us to hide more data but with slightly more visible changes
+        for (size_t i = 0; i < shadow_size; i++) {
+            carrier->data[i] = (carrier->data[i] & 0xFC) | (shadow[i] & 0x03);
         }
     }
-    if (found_shadows < k) {
-        printf("Error: Could not find enough shadow images (found %d, need %d)\n", found_shadows, k);
+}
+
+uint8_t* extract_shadow_from_carrier(BMPImage* carrier, size_t shadow_size, int k) {
+    uint8_t* shadow = (uint8_t*)malloc(shadow_size);
+    if (!shadow) return NULL;
+
+    if (k == 8) {
+        // For k=8, extract from LSB
+        for (size_t i = 0; i < shadow_size; i++) {
+            shadow[i] = carrier->data[i] & 0x01;
+        }
+    } else {
+        // For k!=8, extract from 2 LSBs
+        for (size_t i = 0; i < shadow_size; i++) {
+            shadow[i] = carrier->data[i] & 0x03;
+        }
+    }
+
+    return shadow;
+}
+
+void free_bmp_image(BMPImage* image) {
+    if (image) {
+        free(image->data);
+        free(image->palette);
+        free(image);
+    }
+}
+
+// Modify distribute_secret to use steganography
+void distribute_secret(const char* secret_image, const char* carrier_images[], int k, int n, const char* directory) {
+    // Read secret image
+    BMPImage* secret = read_bmp_image(secret_image);
+    if (!secret) {
+        printf("Error: Could not read secret image\n");
         return;
     }
-    FILE* first_shadow = fopen(shadow_names[0], "rb");
-    if (!first_shadow) {
-        printf("Error: Could not open first shadow image\n");
+
+    // Generate shadows
+    size_t shadow_size = secret->size;
+    uint8_t** shadows = (uint8_t**)malloc(n * sizeof(uint8_t*));
+    for (int i = 0; i < n; i++) {
+        shadows[i] = (uint8_t*)malloc(shadow_size);
+    }
+
+    // Generate permutation table
+    uint16_t seed_value = (uint16_t)(rand() & 0xFFFF);
+    uint8_t* perm_table = generate_permutation_table(seed_value, shadow_size);
+
+    // Apply permutation to secret image
+    for (size_t i = 0; i < shadow_size; i++) {
+        secret->data[i] ^= perm_table[i];
+    }
+
+    // Generate shadows using polynomial evaluation
+    for (size_t i = 0; i < shadow_size; i++) {
+        uint8_t section[k];
+        for (int j = 0; j < k; j++) {
+            section[j] = secret->data[i];
+        }
+        for (int j = 0; j < n; j++) {
+            shadows[j][i] = evaluate_polynomial(section, k, j + 1);
+        }
+    }
+
+    // Hide shadows in carrier images
+    for (int i = 0; i < n; i++) {
+        BMPImage* carrier = read_bmp_image(carrier_images[i]);
+        if (!carrier) {
+            printf("Error: Could not read carrier image %d\n", i + 1);
+            continue;
+        }
+
+        // Verify carrier image size for k=8
+        if (k == 8 && (carrier->info_header.width != secret->info_header.width ||
+                      carrier->info_header.height != secret->info_header.height)) {
+            printf("Error: Carrier image %d must have same size as secret image for k=8\n", i + 1);
+            free_bmp_image(carrier);
+            continue;
+        }
+
+        // Hide shadow in carrier
+        hide_shadow_in_carrier(carrier, shadows[i], shadow_size, k);
+
+        // Save carrier with hidden shadow
+        char output_name[256];
+        snprintf(output_name, sizeof(output_name), "%s/shadow_%d.bmp", directory, i + 1);
+        write_bmp_image(carrier, output_name);
+
+        free_bmp_image(carrier);
+    }
+
+    // Cleanup
+    for (int i = 0; i < n; i++) {
+        free(shadows[i]);
+    }
+    free(shadows);
+    free(perm_table);
+    free_bmp_image(secret);
+}
+
+// Modify recover_secret to use steganography
+void recover_secret(const char* carrier_images[], const char* output_image, int k, int n, const char* directory) {
+    // Validate input parameters
+    if (!carrier_images || !output_image || !directory) {
+        printf("Error: Invalid input parameters\n");
         return;
     }
-    BMPHeader header;
-    BMPInfoHeader info_header;
-    if (!read_bmp_header(first_shadow, &header, &info_header)) {
-        printf("Error: Invalid BMP file\n");
-        fclose(first_shadow);
+
+    // Read first carrier to get image size
+    BMPImage* first_carrier = read_bmp_image(carrier_images[0]);
+    if (!first_carrier) {
+        printf("Error: Could not read first carrier image: %s\n", carrier_images[0]);
         return;
     }
-    int shadow_width = info_header.width;
-    int shadow_height = info_header.height;
-    size_t shadow_size = shadow_width * shadow_height;
-    // Recover original image size
-    int original_height = shadow_height * k;
-    int original_width = shadow_width;
-    size_t image_size = original_width * original_height;
-    uint16_t seed_value = read_seed_from_header(&header);
-    printf("[DEBUG] Recovery seed value: %u\n", seed_value);
-    uint8_t* recovered_data = (uint8_t*)malloc(image_size);
-    if (!recovered_data) {
-        printf("Error: Memory allocation failed\n");
-        fclose(first_shadow);
+
+    // Validate image format
+    if (first_carrier->info_header.bits_per_pixel != 8) {
+        printf("Error: Carrier images must be 8-bit grayscale\n");
+        free_bmp_image(first_carrier);
         return;
     }
-    uint8_t* shadow_data[10];
+
+    size_t shadow_size = first_carrier->size;
+    uint8_t** shadows = (uint8_t**)malloc(k * sizeof(uint8_t*));
+    if (!shadows) {
+        printf("Error: Memory allocation failed for shadows array\n");
+        free_bmp_image(first_carrier);
+        return;
+    }
+
+    // Initialize shadows array
     for (int i = 0; i < k; i++) {
-        shadow_data[i] = (uint8_t*)malloc(shadow_size);
-        if (!shadow_data[i]) {
-            printf("Error: Memory allocation failed\n");
-            for (int j = 0; j < i; j++) free(shadow_data[j]);
-            free(recovered_data);
-            fclose(first_shadow);
-            return;
-        }
-        FILE* shadow_file = fopen(shadow_names[i], "rb");
-        if (!shadow_file) {
-            printf("Error: Could not open shadow image %d\n", i + 1);
-            for (int j = 0; j <= i; j++) free(shadow_data[j]);
-            free(recovered_data);
-            fclose(first_shadow);
-            return;
-        }
-        fseek(shadow_file, header.data_offset, SEEK_SET);
-        fread(shadow_data[i], 1, shadow_size, shadow_file);
-        fclose(shadow_file);
+        shadows[i] = NULL;
     }
-    uint8_t x_values[10];
-    uint8_t y_values[10];
-    uint8_t coefficients[10];
-    for (int i = 0; i < k; i++) x_values[i] = i + 1;
-    size_t sec = 0;
-    size_t out_idx = 0;
-    printf("Recovered coefficients[0] (first 16): ");
-    int coeff_printed = 0;
-    for (int row = 0; row < shadow_height; row++) {
-        for (int col = 0; col < shadow_width; col++) {
-            if (sec * k >= image_size) break;
-            for (int j = 0; j < k; j++) y_values[j] = shadow_data[j][row * shadow_width + col];
-            interpolate_polynomial(x_values, y_values, k, coefficients);
-            // Debug: Print coefficients for first 3 sections
-            if (sec < 3) {
-                printf("Section %zu, coefficients: ", sec);
-                for (int m = 0; m < k; m++) printf("%02X ", coefficients[m]);
-                printf("\n");
-            }
-            for (int m = 0; m < k && out_idx < image_size; m++, out_idx++) {
-                recovered_data[out_idx] = coefficients[k - 1 - m];
-                if (coeff_printed < 16) {
-                    printf("%02X ", coefficients[k - 1 - m]);
-                    coeff_printed++;
-                }
-            }
-            sec++;
+
+    // Extract shadows from carriers
+    for (int i = 0; i < k; i++) {
+        if (!carrier_images[i]) {
+            printf("Error: Missing carrier image %d\n", i + 1);
+            goto cleanup;
         }
+
+        BMPImage* carrier = read_bmp_image(carrier_images[i]);
+        if (!carrier) {
+            printf("Error: Could not read carrier image %d: %s\n", i + 1, carrier_images[i]);
+            goto cleanup;
+        }
+
+        // Validate carrier image format
+        if (carrier->info_header.bits_per_pixel != 8) {
+            printf("Error: Carrier image %d must be 8-bit grayscale\n", i + 1);
+            free_bmp_image(carrier);
+            goto cleanup;
+        }
+
+        // Validate carrier image size
+        if (carrier->size != shadow_size) {
+            printf("Error: Carrier image %d has different size than first carrier\n", i + 1);
+            free_bmp_image(carrier);
+            goto cleanup;
+        }
+
+        shadows[i] = extract_shadow_from_carrier(carrier, shadow_size, k);
+        if (!shadows[i]) {
+            printf("Error: Failed to extract shadow from carrier %d\n", i + 1);
+            free_bmp_image(carrier);
+            goto cleanup;
+        }
+
+        free_bmp_image(carrier);
     }
-    printf("\n");
-    // Debug: Print first 16 bytes before permutation
-    printf("Recovered data before permutation (first 16 bytes): ");
-    for (int b = 0; b < 16 && b < image_size; b++) {
-        printf("%02X ", recovered_data[b]);
+
+    // Recover secret image
+    uint8_t* recovered_data = (uint8_t*)malloc(shadow_size);
+    if (!recovered_data) {
+        printf("Error: Memory allocation failed for recovered data\n");
+        goto cleanup;
     }
-    printf("\n");
-    uint8_t* perm_table = generate_permutation_table(seed_value, image_size);
+
+    for (size_t i = 0; i < shadow_size; i++) {
+        uint8_t x_values[10];
+        uint8_t y_values[10];
+        for (int j = 0; j < k; j++) {
+            x_values[j] = j + 1;
+            y_values[j] = shadows[j][i];
+        }
+        uint8_t coefficients[10];
+        interpolate_polynomial(x_values, y_values, k, coefficients);
+        recovered_data[i] = coefficients[0];
+    }
+
+    // Apply inverse permutation
+    uint16_t seed_value = first_carrier->header.reserved1;
+    uint8_t* perm_table = generate_permutation_table(seed_value, shadow_size);
     if (!perm_table) {
         printf("Error: Failed to generate permutation table\n");
-        for (int i = 0; i < k; i++) free(shadow_data[i]);
         free(recovered_data);
-        fclose(first_shadow);
-        return;
+        goto cleanup;
     }
-    for (size_t i = 0; i < image_size; i++) {
+
+    for (size_t i = 0; i < shadow_size; i++) {
         recovered_data[i] ^= perm_table[i];
     }
-    // Debug: Print first 16 bytes after permutation
-    printf("Recovered data after permutation (first 16 bytes): ");
-    for (int b = 0; b < 16 && b < image_size; b++) {
-        printf("%02X ", recovered_data[b]);
-    }
-    printf("\n");
-    // Read the palette from the first shadow image
-    size_t palette_size = header.data_offset - sizeof(BMPHeader) - sizeof(BMPInfoHeader);
-    uint8_t* palette = malloc(palette_size);
-    fseek(first_shadow, sizeof(BMPHeader) + sizeof(BMPInfoHeader), SEEK_SET);
-    fread(palette, 1, palette_size, first_shadow);
-    // Write recovered image with original header
-    FILE* output_file = fopen(output_image, "wb");
-    if (!output_file) {
-        printf("Error: Could not create output image\n");
-        for (int i = 0; i < k; i++) free(shadow_data[i]);
-        free(recovered_data);
+
+    // Create output image
+    BMPImage* output = (BMPImage*)malloc(sizeof(BMPImage));
+    if (!output) {
+        printf("Error: Memory allocation failed for output image\n");
         free(perm_table);
-        free(palette);
-        fclose(first_shadow);
-        return;
-    }
-    BMPHeader orig_header = header;
-    BMPInfoHeader orig_info = info_header;
-    orig_info.height = original_height;
-    orig_info.image_size = image_size;
-    orig_header.file_size = orig_header.data_offset + image_size;
-    if (!write_bmp_header(output_file, &orig_header, &orig_info)) {
-        printf("Error: Failed to write output image header\n");
-        for (int i = 0; i < k; i++) free(shadow_data[i]);
         free(recovered_data);
-        free(perm_table);
-        free(palette);
-        fclose(output_file);
-        fclose(first_shadow);
-        return;
+        goto cleanup;
     }
-    // Write the palette
-    fwrite(palette, 1, palette_size, output_file);
-    fseek(output_file, orig_header.data_offset, SEEK_SET);
-    fwrite(recovered_data, 1, image_size, output_file);
-    for (int i = 0; i < k; i++) free(shadow_data[i]);
-    free(recovered_data);
+
+    output->header = first_carrier->header;
+    output->info_header = first_carrier->info_header;
+    output->data = recovered_data;
+    output->size = shadow_size;
+    output->palette = first_carrier->palette;
+    output->palette_size = first_carrier->palette_size;
+
+    // Save recovered image
+    write_bmp_image(output, output_image);
+    printf("Successfully recovered secret image to: %s\n", output_image);
+
+    // Cleanup
     free(perm_table);
-    free(palette);
-    fclose(output_file);
-    fclose(first_shadow);
+    free_bmp_image(output);
+    free_bmp_image(first_carrier);
+    for (int i = 0; i < k; i++) {
+        free(shadows[i]);
+    }
+    free(shadows);
+    return;
+
+cleanup:
+    // Cleanup in case of error
+    if (shadows) {
+        for (int i = 0; i < k; i++) {
+            free(shadows[i]);
+        }
+        free(shadows);
+    }
+    free_bmp_image(first_carrier);
 } 

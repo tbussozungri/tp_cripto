@@ -2,35 +2,53 @@
 #define SECRET_SHARING_H
 
 #include <stdint.h>
+#include <stdio.h>
 
-// BMP file header structures
-#pragma pack(push, 1)
+// BMP file structures
 typedef struct {
-    uint16_t signature;      // 'BM'
-    uint32_t file_size;      // Size of the BMP file
-    uint16_t reserved1;      // Reserved
-    uint16_t reserved2;      // Reserved
-    uint32_t data_offset;    // Offset to image data
+    uint16_t signature;
+    uint32_t file_size;
+    uint16_t reserved1;
+    uint16_t reserved2;
+    uint32_t data_offset;
 } BMPHeader;
 
 typedef struct {
-    uint32_t header_size;    // Size of this header
-    int32_t width;          // Image width
-    int32_t height;         // Image height
-    uint16_t planes;        // Number of color planes
-    uint16_t bits_per_pixel;// Bits per pixel
-    uint32_t compression;   // Compression method
-    uint32_t image_size;    // Size of raw bitmap data
-    int32_t x_pixels_per_meter;
-    int32_t y_pixels_per_meter;
-    uint32_t colors_used;   // Number of colors in palette
+    uint32_t size;
+    int32_t width;
+    int32_t height;
+    uint16_t planes;
+    uint16_t bits_per_pixel;
+    uint32_t compression;
+    uint32_t image_size;
+    int32_t x_pixels_per_m;
+    int32_t y_pixels_per_m;
+    uint32_t colors_used;
     uint32_t colors_important;
 } BMPInfoHeader;
-#pragma pack(pop)
+
+// Image structure for steganography
+typedef struct {
+    BMPHeader header;
+    BMPInfoHeader info_header;
+    uint8_t* data;
+    size_t size;
+    uint8_t* palette;
+    size_t palette_size;
+} BMPImage;
+
+// Function declarations
+void distribute_secret(const char* secret_image, const char* carrier_images[], int k, int n, const char* directory);
+void recover_secret(const char* carrier_images[], const char* output_image, int k, int n, const char* directory);
+
+// New steganography functions
+BMPImage* read_bmp_image(const char* filename);
+void write_bmp_image(BMPImage* image, const char* filename);
+void hide_shadow_in_carrier(BMPImage* carrier, uint8_t* shadow, size_t shadow_size, int k);
+uint8_t* extract_shadow_from_carrier(BMPImage* carrier, size_t shadow_size, int k);
+void free_bmp_image(BMPImage* image);
 
 // Function prototypes
-void distribute_secret(const char* secret_image, int k, int n, const char* directory);
-void recover_secret(const char* output_image, int k, int n, const char* directory);
 int read_bmp_header(FILE* file, BMPHeader* header, BMPInfoHeader* info_header);
 int write_bmp_header(FILE* file, BMPHeader* header, BMPInfoHeader* info_header);
 void print_bmp_info(BMPHeader* header, BMPInfoHeader* info_header);
