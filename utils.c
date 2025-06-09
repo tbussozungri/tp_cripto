@@ -384,15 +384,3 @@ void guardar_sombra_bmp(const char* portadora_path, const char* filename, unsign
     fclose(portadora);
     fclose(salida);
 }
-
-unsigned char **expandir_sombra(unsigned char **sombra_bits, int width, int height) {
-    unsigned char **sombra_expandida = malloc(height * sizeof(unsigned char *));
-    for (int y = 0; y < height; y++) {
-        sombra_expandida[y] = malloc(width * sizeof(unsigned char));
-        for (int x = 0; x < width; x++) {
-            // Si tu sombra es 0 o 1, conviértelo a 0 o 255 para que se vea bien en BMP
-            sombra_expandida[y][x] = sombra_bits[y][x] ? 255 : 0;
-        }
-    }
-    return sombra_expandida;
-}
