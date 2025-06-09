@@ -7,11 +7,8 @@
 #include <stdlib.h>
 #include "utils.h"
 
-#define SEED 43
 
 int main (int argc, char *argv[]) {
-
-
 
     char* secret_image = NULL;
     int k = 0;
@@ -36,79 +33,15 @@ int main (int argc, char *argv[]) {
         }
     }
 
-    FILE *original_image = NULL;
+
     if (mode == 1){
-        original_image = fopen(secret_image, "rb");
+        distribute_image(secret_image, k, n, directory);
     }
-
-    char** portadoras = obtener_portadoras(directory, n);
-    if (!portadoras) {
-        printf("Error: No se encontraron suficientes imágenes portadoras.\n");
-        return 1;
+    else if (mode == 2) {
+        recovery_image(secret_image, k, directory);
+    } else {
+        printf("Modo no definido. Use -d para distribuir o -r para recuperar.\n");
     }
-
-    // Obtenemos el alto y ancho de la imagen, para conocer la cantidad total de píxeles
-    fseek(original_image, 18, SEEK_SET);
-    int32_t width = 0;
-    int32_t height = 0;
-
-    fread(&width, sizeof(int32_t), 1, original_image);
-    fread(&height, sizeof(int32_t), 1, original_image);
-
-    //Defino la seed para luego poder reconstruir la matriz
-    setSeed(SEED);
-
-    //Obtengo el offset para saber donde comienza la imagen
-    fseek(original_image,10,SEEK_SET);
-    int32_t offset = 0;
-    fread(&offset, sizeof (int32_t),1,original_image);
-
-    unsigned char ***shadows;
-    shadows = malloc(n * sizeof(unsigned char **));
-    for (int i = 0; i < n; i++) {
-        shadows[i] = malloc(height * sizeof(unsigned char *));
-        for (int j = 0; j < height; j++) {
-            shadows[i][j] = malloc(width * sizeof(unsigned char));
-        }
-    }
-
-    unsigned char** permutation_matrix = create_permutation_matrix(height, width);
-
-    unsigned char** randomized_image = randomize_image(original_image,permutation_matrix,offset,height, width);
-
-    unsigned char** pixels = calculate_pixels(randomized_image, k, n,height,width);
-
-    int row = 0;
-    int col = 0;
-    int pixels_rows = height * width / k;
-    for (int i = 0; i < pixels_rows ; ++i) {
-        for (int j= 0; j < n ; j++){
-           shadows[j][row][col] = pixels[i][j];
-        }
-        col++;
-        if (col == width) {
-            col = 0;
-            row++;
-        }
-    }
-
-    for (int i = 0; i < n; i++) {
-        char salida[64];
-        sprintf(salida, "portadora_oculta_%d.bmp", i+1);
-        ocultar_shadow_LSB(portadoras[i], salida, shadows[i], width, height);
-    }
-
-
-    // Liberar memoria de shadows
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < height; j++) {
-            free(shadows[i][j]);
-        }
-        free(shadows[i]);
-    }
-    free(shadows);
-
-
     return 0;
 
 }
