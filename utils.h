@@ -26,5 +26,4 @@ uint16_t leer_seed(const char* filename);
 unsigned char** unrandomize_image(unsigned char** randomized_image, unsigned char** permutation_matrix, int height, int width);
 void guardar_bmp(const char* portadora_path, const char* filename, unsigned char** image, int width, int height);
 void guardar_sombra_bmp(const char* portadora_path, const char* filename, unsigned char** sombra, int width, int height);
-unsigned char **expandir_sombra(unsigned char **sombra_bits, int width, int height);
 #endif //TP_CRIPTO_UTILS_H
