@@ -167,32 +167,47 @@ char** obtener_portadoras(const char* directory, int n) {
     return portadoras;
 }
 
-unsigned char** extraer_shadows_LSB(const char* portadora, int width, int height) {
+unsigned char** extraer_shadows_LSB(const char* portadora, int width, int height, int k) {
     FILE* f = fopen(portadora, "rb");
     if (!f) return NULL;
     unsigned char header[1078];
     fread(header, 1, 1078, f);
-
-    int row_padded = (width + 3) & (~3);
-    int sombra_width = width / 8;
-    unsigned char** sombra = malloc(height * sizeof(unsigned char*));
-    unsigned char* buffer = malloc(row_padded);
-
-    for (int y = height - 1; y >= 0; y--) {
-        sombra[y] = malloc(sombra_width);
-        fread(buffer, 1, row_padded, f);
-        for (int x = 0; x < sombra_width; x++) {
-            unsigned char byte = 0;
-            for (int b = 0; b < 8; b++) {
-                byte |= (buffer[x * 8 + b] & 0x01) << (7 - b);
-            }
-            sombra[y][x] = byte;
-        }
+    unsigned char** shadow = malloc(k * sizeof(unsigned char*));
+    for (int i = 0; i < height * width / k; i++) {
+        shadow[i] = malloc(width * sizeof(unsigned char));
     }
-    free(buffer);
-    fclose(f);
-    return sombra;
+    int count = 0;
+    int index = 0;
+    int row = 0;
+    int col = 0;
+    fseek(f, 1078, SEEK_SET); // Saltar el encabezado
+    unsigned char pixel;
+    unsigned char buffer[8] = {0};
+
+    int total_pixels = width * height;
+    while (index < total_pixels) {
+        fread(&pixel, sizeof(unsigned char), 1, f);
+        buffer[count] = (pixel & 0x01); // Extraer el bit menos significativo
+        count++;
+        if (count % k == 0) {
+            // Guardar los bits en la sombra
+            unsigned char byte = 0;
+            for (int i = 0; i < 8; i++) {
+                byte |= (buffer[i] & 0x01) << (7 - i);
+            }
+            shadow[row][col++] = byte;
+            if (col % width == 0)
+            {
+                row++;
+                col = 0;
+            }
+            count = 0;
+        }
+        index++;
+    }
+    return shadow;
 }
+
 
 int inverso_modulo_257(int a) {
     int t = 0, newt = 1;
@@ -368,4 +383,16 @@ void guardar_sombra_bmp(const char* portadora_path, const char* filename, unsign
     free(buffer);
     fclose(portadora);
     fclose(salida);
+}
+
+unsigned char **expandir_sombra(unsigned char **sombra_bits, int width, int height) {
+    unsigned char **sombra_expandida = malloc(height * sizeof(unsigned char *));
+    for (int y = 0; y < height; y++) {
+        sombra_expandida[y] = malloc(width * sizeof(unsigned char));
+        for (int x = 0; x < width; x++) {
+            // Si tu sombra es 0 o 1, conviértelo a 0 o 255 para que se vea bien en BMP
+            sombra_expandida[y][x] = sombra_bits[y][x] ? 255 : 0;
+        }
+    }
+    return sombra_expandida;
 }

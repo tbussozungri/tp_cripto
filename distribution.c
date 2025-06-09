@@ -106,8 +106,24 @@ void recovery_image(char* output_image, int k, char* directory) {
     fread(&height, sizeof(int32_t), 1, file);
     fclose(file);
 
-    // Extraer sombras
-    unsigned char*** shadows = extraer_shadows_LSB(portadoras, width, height);
+    // Extraer sombras de cada portadora
+    unsigned char*** shadows = malloc(k * sizeof(unsigned char**));
+    for (int i = 0; i < k; i++) {
+        shadows[i] = extraer_shadows_LSB(portadoras[i], width, height,k);
+        if (!shadows[i]) {
+            printf("Error al extraer la sombra de la portadora %d\n", i+1);
+            // Liberar memoria y salir
+            for (int j = 0; j < i; j++) {
+                for (int h = 0; h < height; h++) {
+                    free(shadows[j][h]);
+                }
+                free(shadows[j]);
+            }
+            free(shadows);
+            return;
+        }
+    }
+
 
     for (int i = 0; i < k; i++) {
         char nombre[128];

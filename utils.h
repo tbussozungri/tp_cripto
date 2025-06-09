@@ -16,7 +16,7 @@ void ocultar_shadow_LSB(const char* portadora_path, const char* salida_path, uns
 char** obtener_portadoras(const char* directory, int n);
 void distribute_image(char* secret_image, int k, int n, char* directory);
 void recovery_image(char* secret_image, int k, char* directory);
-unsigned char*** extraer_shadows_LSB(char** portadoras, int width, int height);
+unsigned char** extraer_shadows_LSB(char* portadoras, int width, int height,int k);
 int inverso_modulo_257(int a);
 void gauss_jordan_gf257(int** matriz, int* resultado, int k);
 void construir_vandermonde(int** matriz, int k);
@@ -26,4 +26,5 @@ uint16_t leer_seed(const char* filename);
 unsigned char** unrandomize_image(unsigned char** randomized_image, unsigned char** permutation_matrix, int height, int width);
 void guardar_bmp(const char* portadora_path, const char* filename, unsigned char** image, int width, int height);
 void guardar_sombra_bmp(const char* portadora_path, const char* filename, unsigned char** sombra, int width, int height);
+unsigned char **expandir_sombra(unsigned char **sombra_bits, int width, int height);
 #endif //TP_CRIPTO_UTILS_H
