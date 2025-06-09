@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <dirent.h>
+#include <string.h>
 int64_t seed;
 void setSeed(int64_t s){
     seed = (s ^ 0x5DEECE66DL) & ((1LL << 48) - 1);
@@ -59,13 +61,97 @@ unsigned char** randomize_image(FILE* original_image,unsigned char** permutation
     return randomized_image;
 }
 
-unsigned char * calculate_pixels(unsigned char** randomized_image, int k, int n){
-    unsigned char pixel;
-    unsigned char * pixels = malloc(n * sizeof(unsigned char));
-    for (int i = 0; i < k; i++){
-        fread(&pixel, sizeof(unsigned char), 1, randomized_image);
-        pixels[i] = pixel;
-        fseek(randomized_image, sizeof(unsigned char), SEEK_CUR);
+unsigned char polynomial_evaluation(unsigned char* coefficients, int degree, unsigned char x) {
+    int result = 0;
+    int x_pow = 1;
+    for (int i = 0; i < degree; i++) {
+        result = (result + (coefficients[i] * x_pow) % 257) % 257;
+        x_pow = (x_pow * x) % 257;
+    }
+    return (unsigned char)result;
+}
+
+unsigned char** calculate_pixels(unsigned char** randomized_image, int k, int n, int rows, int cols) {
+    unsigned char* pixels = malloc( k * sizeof(unsigned char));
+    unsigned char* values = malloc(n * sizeof(unsigned char));
+    unsigned char ** result = malloc(rows * cols / k * sizeof (unsigned char *));
+    int total_pixels = rows * cols;
+    int count = 0;
+    int idx = 0;
+    int index = 0;
+    while (idx < total_pixels) {
+        int row = idx / cols;
+        int col = idx % cols;
+        pixels[count] = randomized_image[row][col];
+        count++;
+        idx++;
+        // Si ya tomaste k píxeles, puedes hacer aquí lo que necesites con el bloque
+        if (count % k == 0) {
+            count = 0;
+            for (int i = 1; i <= n; ++i) {
+                values[i] = polynomial_evaluation(pixels, k, i);
+            }
+            result[index] = values;
+            index++;
+        }
+
+    }
+    return result;
+}
+
+void ocultar_shadow_LSB(const char* portadora_path, const char* salida_path, unsigned char** shadow, int width, int height) {
+    FILE* portadora = fopen(portadora_path, "rb");
+    FILE* salida = fopen(salida_path, "wb");
+    if (!portadora || !salida) {
+        printf("No se pudo abrir el archivo portadora o de salida.\n");
+        if (portadora) fclose(portadora);
+        if (salida) fclose(salida);
+        return;
     }
 
+    // Leer y escribir encabezado BMP (asume 8 bits por píxel, 54+1024 bytes)
+    unsigned char header[1078];
+    fread(header, 1, 1078, portadora);
+    fwrite(header, 1, 1078, salida);
+
+    int row_padded = (width + 3) & (~3);
+    unsigned char* buffer = malloc(row_padded);
+
+    for (int y = height - 1; y >= 0; y--) {
+        fread(buffer, 1, row_padded, portadora);
+        for (int x = 0; x < width; x++) {
+            // Oculta el bit menos significativo
+            buffer[x] = (buffer[x] & 0xFE) | (shadow[y][x] & 0x01);
+        }
+        fwrite(buffer, 1, row_padded, salida);
+    }
+
+    free(buffer);
+    fclose(portadora);
+    fclose(salida);
+}
+
+char** obtener_portadoras(const char* directory, int n) {
+    DIR* dir = opendir(directory);
+    if (!dir) return NULL;
+
+    char** portadoras = malloc(n * sizeof(char*));
+    int count = 0;
+    struct dirent* entry;
+    while ((entry = readdir(dir)) && count < n) {
+        if (strstr(entry->d_name, ".bmp")) {
+            portadoras[count] = malloc(512);
+            snprintf(portadoras[count], 512, "%s/%s", directory, entry->d_name);
+            count++;
+        }
+    }
+    closedir(dir);
+
+    if (count < n) {
+        // No hay suficientes imágenes
+        for (int i = 0; i < count; i++) free(portadoras[i]);
+        free(portadoras);
+        return NULL;
+    }
+    return portadoras;
 }
