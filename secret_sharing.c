@@ -60,13 +60,6 @@ void distribute_image(char* secret_image, int k, int n, char* directory){
         }
     }
 
-    for (int i = 0; i < k; i++) {
-        char nombre[128];
-        snprintf(nombre, sizeof(nombre), "sombrasG/sombra_portadora_oculta%d.bmp", i + 1);
-        guardar_sombra_bmp(portadoras[i], nombre, shadows[i], width, height);
-    }
-
-
     for (int i = 0; i < n; i++) {
         char salida[128];
         snprintf(salida, sizeof(salida), "%s/portadora_oculta_%d.bmp", "portadoras", i+1);
@@ -124,14 +117,6 @@ void recovery_image(char* output_image, int k, char* directory) {
         }
     }
 
-
-    for (int i = 0; i < k; i++) {
-        char nombre[128];
-        snprintf(nombre, sizeof(nombre), "sombrasR/sombra_portadora_oculta%d.bmp", i + 1);
-        guardar_sombra_bmp(portadoras[i], nombre, shadows[i], width, height);
-    }
-
-    // Matriz de Vandermonde
     int** vandermonde = malloc(k * sizeof(int*));
     for (int i = 0; i < k; i++) vandermonde[i] = malloc(k * sizeof(int));
     construir_vandermonde(vandermonde, k);

@@ -167,47 +167,47 @@ char** obtener_portadoras(const char* directory, int n) {
     return portadoras;
 }
 
-unsigned char** extraer_shadows_LSB(const char* portadora, int width, int height, int k) {
+unsigned char** extraer_shadows_LSB(const char* portadora, int width, int height) {
     FILE* f = fopen(portadora, "rb");
     if (!f) return NULL;
+
     unsigned char header[1078];
     fread(header, 1, 1078, f);
-    unsigned char** shadow = malloc(k * sizeof(unsigned char*));
-    for (int i = 0; i < height * width / k; i++) {
-        shadow[i] = malloc(width * sizeof(unsigned char));
-    }
-    int count = 0;
-    int index = 0;
-    int row = 0;
-    int col = 0;
-    fseek(f, 1078, SEEK_SET); // Saltar el encabezado
-    unsigned char pixel;
-    unsigned char buffer[8] = {0};
 
-    int total_pixels = width * height;
-    while (index < total_pixels) {
-        fread(&pixel, sizeof(unsigned char), 1, f);
-        buffer[count] = (pixel & 0x01); // Extraer el bit menos significativo
-        count++;
-        if (count % k == 0) {
-            // Guardar los bits en la sombra
-            unsigned char byte = 0;
-            for (int i = 0; i < 8; i++) {
-                byte |= (buffer[i] & 0x01) << (7 - i);
-            }
-            shadow[row][col++] = byte;
-            if (col % width == 0)
-            {
-                row++;
-                col = 0;
-            }
-            count = 0;
+    int row_padded = (width + 3) & (~3);
+    unsigned char* buffer = malloc(row_padded);
+    if (!buffer) {
+        fclose(f);
+        return NULL;
+    }
+
+    unsigned char** sombra = malloc(height * sizeof(unsigned char*));
+    if (!sombra) {
+        fclose(f);
+        free(buffer);
+        return NULL;
+    }
+
+    for (int y = height - 1; y >= 0; y--) {
+        sombra[y] = malloc(width);
+        if (!sombra[y]) {
+            for (int k = y + 1; k < height; k++) free(sombra[k]);
+            free(sombra);
+            free(buffer);
+            fclose(f);
+            return NULL;
         }
-        index++;
-    }
-    return shadow;
-}
 
+        fread(buffer, 1, row_padded, f);
+        for (int x = 0; x < width; x++) {
+            sombra[y][x] = buffer[x] & 0x01 ? 255 : 0; // escalar a blanco o negro si lo vas a visualizar
+        }
+    }
+
+    free(buffer);
+    fclose(f);
+    return sombra;
+}
 
 int inverso_modulo_257(int a) {
     int t = 0, newt = 1;
@@ -348,34 +348,6 @@ void guardar_bmp(const char* portadora_path, const char* filename, unsigned char
     for (int y = height - 1; y >= 0; y--) {
         memcpy(buffer, image[y], width);
         // Asegúrate de limpiar el resto del buffer si width < row_padded
-        memset(buffer + width, 0, row_padded - width);
-        fwrite(buffer, 1, row_padded, salida);
-    }
-
-    free(buffer);
-    fclose(portadora);
-    fclose(salida);
-}
-
-void guardar_sombra_bmp(const char* portadora_path, const char* filename, unsigned char** sombra, int width, int height) {
-    FILE* portadora = fopen(portadora_path, "rb");
-    FILE* salida = fopen(filename, "wb");
-    if (!portadora || !salida) {
-        printf("No se pudo abrir el archivo portadora o de salida.\n");
-        if (portadora) fclose(portadora);
-        if (salida) fclose(salida);
-        return;
-    }
-
-    unsigned char header[1078];
-    fread(header, 1, 1078, portadora);
-    fwrite(header, 1, 1078, salida);
-
-    int row_padded = (width + 3) & (~3);
-    unsigned char* buffer = calloc(row_padded, 1);
-
-    for (int y = height - 1; y >= 0; y--) {
-        memcpy(buffer, sombra[y], width);
         memset(buffer + width, 0, row_padded - width);
         fwrite(buffer, 1, row_padded, salida);
     }
