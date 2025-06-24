@@ -15,62 +15,6 @@ public class SecretSharingMath {
         return polynomialResult;
     }
 
-    public static int[] solveLinearSystemModulo(int[][] coefficientMatrix, int[] constantVector, int modulus) {
-        int systemSize = coefficientMatrix.length;
-        int[][] augmentedMatrix = new int[systemSize][systemSize + 1];
-        
-        // Create augmented matrix
-        for (int rowIndex = 0; rowIndex < systemSize; rowIndex++) {
-            System.arraycopy(coefficientMatrix[rowIndex], 0, augmentedMatrix[rowIndex], 0, systemSize);
-            augmentedMatrix[rowIndex][systemSize] = constantVector[rowIndex];
-        }
-        
-        // Gaussian elimination with modular arithmetic
-        for (int pivotRow = 0; pivotRow < systemSize; pivotRow++) {
-            // Find pivot with non-zero element
-            int maxRow = pivotRow;
-            for (int row = pivotRow + 1; row < systemSize; row++) {
-                if (Math.abs(augmentedMatrix[row][pivotRow]) > Math.abs(augmentedMatrix[maxRow][pivotRow])) {
-                    maxRow = row;
-                }
-            }
-            
-            // Swap rows if necessary
-            if (maxRow != pivotRow) {
-                int[] temp = augmentedMatrix[pivotRow];
-                augmentedMatrix[pivotRow] = augmentedMatrix[maxRow];
-                augmentedMatrix[maxRow] = temp;
-            }
-            
-            // Normalize pivot row
-            int pivotElement = augmentedMatrix[pivotRow][pivotRow];
-            int inversePivot = calculateModularInverse(pivotElement, modulus);
-            
-            for (int col = pivotRow; col <= systemSize; col++) {
-                augmentedMatrix[pivotRow][col] = (augmentedMatrix[pivotRow][col] * inversePivot) % modulus;
-            }
-            
-            // Eliminate pivot column in other rows
-            for (int row = 0; row < systemSize; row++) {
-                if (row != pivotRow) {
-                    int factor = augmentedMatrix[row][pivotRow];
-                    for (int col = pivotRow; col <= systemSize; col++) {
-                        augmentedMatrix[row][col] = (augmentedMatrix[row][col] - 
-                                                   (factor * augmentedMatrix[pivotRow][col]) % modulus + modulus) % modulus;
-                    }
-                }
-            }
-        }
-        
-        // Extract solution
-        int[] solution = new int[systemSize];
-        for (int i = 0; i < systemSize; i++) {
-            solution[i] = augmentedMatrix[i][systemSize];
-        }
-        
-        return solution;
-    }
-
     public static int calculateModularInverse(int number, int modulus) {
         number = ((number % modulus) + modulus) % modulus;
         int originalModulus = modulus, temporaryValue, quotient;
@@ -89,19 +33,6 @@ public class SecretSharingMath {
         }
         
         return currentX < 0 ? currentX + originalModulus : currentX;
-    }
-
-    public static int[][] createCoefficientMatrix(int[] xValues, int thresholdValue, int modulus) {
-        int[][] coefficientMatrix = new int[thresholdValue][thresholdValue];
-        for (int matrixRow = 0; matrixRow < thresholdValue; matrixRow++) {
-            int xValue = xValues[matrixRow];
-            int currentValue = 1;
-            for (int matrixCol = 0; matrixCol < thresholdValue; matrixCol++) {
-                coefficientMatrix[matrixRow][matrixCol] = currentValue;
-                currentValue = (currentValue * xValue) % modulus;
-            }
-        }
-        return coefficientMatrix;
     }
 
     public static int getModuloValue() {
@@ -157,8 +88,79 @@ public class SecretSharingMath {
     }
 
     public static int[] solvePolynomialCoefficients(int[] shareIdentifiers, int[] yValues, int thresholdValue) {
-        int[][] coefficientMatrix = createCoefficientMatrix(shareIdentifiers, thresholdValue, MODULO_VALUE);
-        return solveLinearSystemModulo(coefficientMatrix, yValues, MODULO_VALUE);
+        return solvePolynomialCoefficientsLagrange(shareIdentifiers, yValues, thresholdValue, MODULO_VALUE);
+    }
+
+    //Solves polynomial coefficients using Lagrange interpolation
+    public static int[] solvePolynomialCoefficientsLagrange(int[] xValues, int[] yValues, int thresholdValue, int modulus) {
+        int[] coefficients = new int[thresholdValue];
+        
+        // For each coefficient position (a0, a1, a2, ...)
+        for (int coeffIndex = 0; coeffIndex < thresholdValue; coeffIndex++) {
+            int coefficient = 0;
+            
+            // For each Lagrange basis polynomial L_i
+            for (int i = 0; i < thresholdValue; i++) {
+                // Calculate L_i(x) coefficient at position coeffIndex
+                int lagrangeCoeff = calculateLagrangeCoefficient(xValues, i, coeffIndex, modulus);
+                
+                // Multiply by y_i and add to the result
+                coefficient = (coefficient + (lagrangeCoeff * yValues[i]) % modulus) % modulus;
+            }
+            
+            coefficients[coeffIndex] = coefficient;
+        }
+        
+        return coefficients;
+    }
+    
+    //Calculates the coefficient of x^coeffIndex in the Lagrange basis polynomial L_i(x)
+    private static int calculateLagrangeCoefficient(int[] xValues, int i, int coeffIndex, int modulus) {
+        int n = xValues.length;
+        
+        // Calculate denominator: Π(j≠i) (x_i - x_j)
+        int denominator = 1;
+        for (int j = 0; j < n; j++) {
+            if (j != i) {
+                denominator = (denominator * ((xValues[i] - xValues[j] + modulus) % modulus)) % modulus;
+            }
+        }
+        int denominatorInverse = calculateModularInverse(denominator, modulus);
+        
+        // Calculate numerator coefficient of x^coeffIndex in Π(j≠i) (x - x_j)
+        int[] numeratorCoeffs = new int[n];
+        numeratorCoeffs[0] = 1; // Start with 1 (constant term)
+        
+        for (int j = 0; j < n; j++) {
+            if (j != i) {
+                // Multiply by (x - x_j)
+                multiplyByLinearFactor(numeratorCoeffs, (-xValues[j] + modulus) % modulus, modulus);
+            }
+        }
+        
+        // Return the coefficient at the desired position
+        int result = (numeratorCoeffs[coeffIndex] * denominatorInverse) % modulus;
+        return result < 0 ? result + modulus : result;
+    }
+    
+    //Multiplies a polynomial (stored as coefficients) by (x + constant)
+    //This is equivalent to shifting and adding the constant multiple
+    private static void multiplyByLinearFactor(int[] coeffs, int constant, int modulus) {
+        int n = coeffs.length;
+        int[] result = new int[n];
+        
+        // Multiply by x (shift right)
+        for (int i = 1; i < n; i++) {
+            result[i] = coeffs[i - 1];
+        }
+        
+        // Add constant multiple
+        for (int i = 0; i < n; i++) {
+            result[i] = (result[i] + (coeffs[i] * constant) % modulus) % modulus;
+        }
+        
+        // Copy back to original array
+        System.arraycopy(result, 0, coeffs, 0, n);
     }
 
     public static void storePolynomialCoefficients(byte[] reconstructedData, int[] coefficients, int polynomialIndex, int thresholdValue) {
