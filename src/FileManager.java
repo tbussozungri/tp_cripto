@@ -1,4 +1,5 @@
 import java.io.File;
+import java.io.IOException;
 
 public class FileManager {
     
@@ -64,6 +65,19 @@ public class FileManager {
     public static void validateSufficientImages(File[] imageFiles, int totalShares, String sourceDirectory) {
         if (imageFiles == null || imageFiles.length < totalShares) {
             throw new IllegalArgumentException("Insufficient BMP images available in directory: " + sourceDirectory);
+        }
+    }
+
+    public static void validateShadowFilesExist(File[] shadowFiles, String shadowDirectory) throws IOException {
+        if (shadowFiles == null || shadowFiles.length == 0) {
+            throw new IOException("No shadow files detected in directory: " + shadowDirectory);
+        }
+    }
+
+    public static void validateSufficientShadowFiles(File[] shadowFiles, int thresholdValue) {
+        if (shadowFiles == null || shadowFiles.length < thresholdValue) {
+            throw new IllegalArgumentException("Insufficient shadow files found: need " + thresholdValue + 
+                                             " but only " + (shadowFiles != null ? shadowFiles.length : 0) + " available");
         }
     }
 } 

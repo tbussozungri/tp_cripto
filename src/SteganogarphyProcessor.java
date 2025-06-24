@@ -1,3 +1,5 @@
+import java.util.List;
+
 public class SteganogarphyProcessor {
 
     private static final int BITS_PER_BYTE = 8;
@@ -54,5 +56,14 @@ public class SteganogarphyProcessor {
         }
         return extractedSecretData;
 
+    }
+
+    public static byte[][] extractHiddenDataFromShadows(List<ImageProcessor> shadowImages, int polynomialCount, int thresholdValue) {
+        byte[][] extractedData = new byte[thresholdValue][polynomialCount];
+        for (int shadowIndex = 0; shadowIndex < thresholdValue; shadowIndex++) {
+            byte[] pixelData = shadowImages.get(shadowIndex).retrievePixelData();
+            extractedData[shadowIndex] = retrieveHiddenData(pixelData, polynomialCount);
+        }
+        return extractedData;
     }
 }

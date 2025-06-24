@@ -146,4 +146,25 @@ public class SecretSharingMath {
             shareValues[shareIndex][polynomialIndex] = (byte) polynomialValue;
         }
     }
+
+    public static int[] extractYValuesForPolynomial(byte[][] extractedData, int polynomialIndex, int thresholdValue) {
+        int[] yValues = new int[thresholdValue];
+        for (int shadowIndex = 0; shadowIndex < thresholdValue; shadowIndex++) {
+            int extractedValue = Byte.toUnsignedInt(extractedData[shadowIndex][polynomialIndex]);
+            yValues[shadowIndex] = extractedValue;
+        }
+        return yValues;
+    }
+
+    public static int[] solvePolynomialCoefficients(int[] shareIdentifiers, int[] yValues, int thresholdValue) {
+        int[][] coefficientMatrix = createCoefficientMatrix(shareIdentifiers, thresholdValue, MODULO_VALUE);
+        return solveLinearSystemModulo(coefficientMatrix, yValues, MODULO_VALUE);
+    }
+
+    public static void storePolynomialCoefficients(byte[] reconstructedData, int[] coefficients, int polynomialIndex, int thresholdValue) {
+        for (int coefficientIndex = 0; coefficientIndex < thresholdValue; coefficientIndex++) {
+            int dataIndex = polynomialIndex * thresholdValue + coefficientIndex;
+            reconstructedData[dataIndex] = (byte) coefficients[coefficientIndex];
+        }
+    }
 } 
