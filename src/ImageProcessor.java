@@ -79,13 +79,6 @@ public class ImageProcessor {
         return (short)(((fileHeader[bytePosition + 1] & BYTE_MASK) << 8) | (fileHeader[bytePosition] & BYTE_MASK));
     }
 
-    public int extractIntegerFromHeader(int bytePosition) {
-        return ((fileHeader[bytePosition + 3] & BYTE_MASK) << 24) |
-               ((fileHeader[bytePosition + 2] & BYTE_MASK) << 16) |
-               ((fileHeader[bytePosition + 1] & BYTE_MASK) << 8) |
-               (fileHeader[bytePosition] & BYTE_MASK);
-    }
-
     public void updatePixelData(byte[] newPixels) {
         this.imagePixels = newPixels;
     }
@@ -165,5 +158,12 @@ public class ImageProcessor {
         updatedHeader[IMAGE_SIZE_OFFSET_37] = (byte) ((resizedPixels.length >> 24) & BYTE_MASK);
 
         return new ImageProcessor(updatedHeader, resizedPixels);
+    }
+
+    public int extractIntegerFromHeader(int bytePosition) {
+        return ((fileHeader[bytePosition + 3] & BYTE_MASK) << 24) |
+               ((fileHeader[bytePosition + 2] & BYTE_MASK) << 16) |
+               ((fileHeader[bytePosition + 1] & BYTE_MASK) << 8) |
+               (fileHeader[bytePosition] & BYTE_MASK);
     }
 }

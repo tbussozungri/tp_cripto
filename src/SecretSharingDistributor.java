@@ -39,6 +39,17 @@ public class SecretSharingDistributor {
         this.sourceDirectory = sourceDirectory;
     }
 
+    public int calculatePolynomialCount() {
+        return scrambledSecretData.length / thresholdValue;
+    }
+
+    public void createShares(int randomSeed) throws Exception {
+        List<ImageProcessor> carrierImages = loadAndValidateCarrierImages();
+        int polynomialCount = calculatePolynomialCount();
+        byte[][] shareValues = generateShareValues(polynomialCount);
+        embedSharesIntoImages(carrierImages, shareValues, polynomialCount, randomSeed);
+    }
+
     private void validateConstructorParameters(byte[] scrambledSecretData, int thresholdValue, int totalShares) {
         if (scrambledSecretData.length % thresholdValue != 0) {
             throw new IllegalArgumentException("Secret data size is not compatible with threshold k. " +
@@ -53,17 +64,6 @@ public class SecretSharingDistributor {
         if (thresholdValue > totalShares) {
             throw new IllegalArgumentException("Threshold k cannot exceed total shares n");
         }
-    }
-
-    public int calculatePolynomialCount() {
-        return scrambledSecretData.length / thresholdValue;
-    }
-
-    public void createShares(int randomSeed) throws Exception {
-        List<ImageProcessor> carrierImages = loadAndValidateCarrierImages();
-        int polynomialCount = calculatePolynomialCount();
-        byte[][] shareValues = generateShareValues(polynomialCount);
-        embedSharesIntoImages(carrierImages, shareValues, polynomialCount, randomSeed);
     }
 
     private List<ImageProcessor> loadAndValidateCarrierImages() throws Exception {

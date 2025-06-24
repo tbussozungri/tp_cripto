@@ -29,18 +29,6 @@ public class SecretSharingRecoverer {
         this.shadowDirectory = shadowDirectory;
     }
 
-    private void validateConstructorParameters(int thresholdValue, int totalShares) {
-        if (thresholdValue < MIN_THRESHOLD || thresholdValue > MAX_THRESHOLD) {
-            throw new IllegalArgumentException("Threshold k must be within range " + MIN_THRESHOLD + " to " + MAX_THRESHOLD);
-        }
-        if (thresholdValue > totalShares) {
-            throw new IllegalArgumentException("Threshold k cannot exceed total shares n");
-        }
-        if (totalShares < MIN_TOTAL_SHARES) {
-            throw new IllegalArgumentException("Total shares n must be at least " + MIN_TOTAL_SHARES);
-        }
-    }
-
     public short extractRandomSeed() {
         try {
             File[] shadowFiles = FileManager.findBmpFilesInDirectory(shadowDirectory);
@@ -63,6 +51,18 @@ public class SecretSharingRecoverer {
         
         byte[][] extractedData = SteganogarphyProcessor.extractHiddenDataFromShadows(shadowImages, polynomialCount, thresholdValue);
         return reconstructScrambledData(extractedData, shareIdentifiers, polynomialCount);
+    }
+
+    private void validateConstructorParameters(int thresholdValue, int totalShares) {
+        if (thresholdValue < MIN_THRESHOLD || thresholdValue > MAX_THRESHOLD) {
+            throw new IllegalArgumentException("Threshold k must be within range " + MIN_THRESHOLD + " to " + MAX_THRESHOLD);
+        }
+        if (thresholdValue > totalShares) {
+            throw new IllegalArgumentException("Threshold k cannot exceed total shares n");
+        }
+        if (totalShares < MIN_TOTAL_SHARES) {
+            throw new IllegalArgumentException("Total shares n must be at least " + MIN_TOTAL_SHARES);
+        }
     }
 
     private List<ImageProcessor> loadRandomShadowImages(File[] shadowFiles) throws IOException {
