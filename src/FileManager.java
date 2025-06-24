@@ -55,4 +55,15 @@ public class FileManager {
         }
         return bmpFiles.length;
     }
+
+    public static File[] findBmpFilesInDirectory(String directoryPath) {
+        File directoryPathFile = new File(directoryPath);
+        return directoryPathFile.listFiles((fileFilter, fileName) -> fileName.toLowerCase().endsWith(".bmp"));
+    }
+
+    public static void validateSufficientImages(File[] imageFiles, int totalShares, String sourceDirectory) {
+        if (imageFiles == null || imageFiles.length < totalShares) {
+            throw new IllegalArgumentException("Insufficient BMP images available in directory: " + sourceDirectory);
+        }
+    }
 } 

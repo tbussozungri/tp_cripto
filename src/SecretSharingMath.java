@@ -107,4 +107,43 @@ public class SecretSharingMath {
     public static int getModuloValue() {
         return MODULO_VALUE;
     }
+
+    public static void adjustPolynomialCoefficientsIfNeeded(int polynomialIndex, byte[] scrambledSecretData, 
+                                                          int thresholdValue, int totalShares) {
+        boolean coefficientsAdjusted;
+        do {
+            coefficientsAdjusted = false;
+            for (int shareId = 1; shareId <= totalShares; shareId++) {
+                int evaluationResult = computePolynomialValue(shareId, polynomialIndex, 
+                                                            scrambledSecretData, thresholdValue) % MODULO_VALUE;
+                
+                if (evaluationResult == 256) { // MAX_BYTE_VALUE
+                    coefficientsAdjusted = reducePolynomialCoefficients(polynomialIndex, scrambledSecretData, thresholdValue) || coefficientsAdjusted;
+                }
+            }
+        } while (coefficientsAdjusted);
+    }
+
+    public static boolean reducePolynomialCoefficients(int polynomialIndex, byte[] scrambledSecretData, int thresholdValue) {
+        for (int coefficientIndex = 0; coefficientIndex < thresholdValue; coefficientIndex++) {
+            int coefficientPosition = polynomialIndex * thresholdValue + coefficientIndex;
+            int coefficientValue = Byte.toUnsignedInt(scrambledSecretData[coefficientPosition]);
+            
+            if (coefficientValue != 0) {
+                scrambledSecretData[coefficientPosition]--;
+                return true;
+            }
+        }
+        throw new IllegalStateException("Unable to proceed: all polynomial coefficients are zero and cannot be reduced further");
+    }
+
+    public static void computeShareValuesForPolynomial(int polynomialIndex, byte[][] shareValues, 
+                                                     byte[] scrambledSecretData, int thresholdValue, int totalShares) {
+        for (int shareIndex = 0; shareIndex < totalShares; shareIndex++) {
+            int shareId = shareIndex + 1;
+            int polynomialValue = computePolynomialValue(shareId, polynomialIndex, 
+                                                       scrambledSecretData, thresholdValue) % MODULO_VALUE;
+            shareValues[shareIndex][polynomialIndex] = (byte) polynomialValue;
+        }
+    }
 } 

@@ -67,8 +67,8 @@ public class SecretSharingDistributor {
     }
 
     private List<ImageProcessor> loadAndValidateCarrierImages() throws Exception {
-        File[] imageFiles = findBmpFilesInDirectory();
-        validateSufficientImages(imageFiles);
+        File[] imageFiles = FileManager.findBmpFilesInDirectory(sourceDirectory);
+        FileManager.validateSufficientImages(imageFiles, totalShares, sourceDirectory);
         
         List<ImageProcessor> carrierImages = new ArrayList<>();
         for (int imageIndex = 0; imageIndex < totalShares; imageIndex++) {
@@ -78,95 +78,30 @@ public class SecretSharingDistributor {
         return carrierImages;
     }
 
-    private File[] findBmpFilesInDirectory() {
-        File directoryPath = new File(sourceDirectory);
-        return directoryPath.listFiles((fileFilter, fileName) -> fileName.toLowerCase().endsWith(".bmp"));
-    }
-
-    private void validateSufficientImages(File[] imageFiles) {
-        if (imageFiles == null || imageFiles.length < totalShares) {
-            throw new IllegalArgumentException("Insufficient BMP images available in directory: " + sourceDirectory);
-        }
-    }
-
     private ImageProcessor createCarrierImage(File imageFile, int imageIndex) throws Exception {
         String fileName = imageFile.getName();
         ImageProcessor carrierImage = new ImageProcessor(imageFile.getAbsolutePath());
         
-        validateImageDimensions(carrierImage, fileName, imageIndex);
+        ImageValidator.validateImageDimensions(carrierImage, fileName, imageIndex, secretImageWidth, secretImageHeight);
         
-        if (shouldResizeImage(carrierImage)) {
+        if (ImageValidator.shouldResizeImage(carrierImage, thresholdValue, secretImageWidth, secretImageHeight)) {
             carrierImage = carrierImage.resizeImage(secretImageWidth, secretImageHeight);
         }
         
         return new ImageProcessor(originalSecretImage.retrieveHeader(), carrierImage.retrievePixelData());
     }
 
-    private void validateImageDimensions(ImageProcessor carrierImage, String fileName, int imageIndex) {
-        if (carrierImage.extractImageWidth() < secretImageWidth || 
-            carrierImage.extractImageHeight() < secretImageHeight) {
-            System.err.printf("Carrier image %d (%s) dimensions (%dx%d) are smaller than secret image (%dx%d).\n", 
-                            imageIndex + 1, fileName, carrierImage.extractImageWidth(), 
-                            carrierImage.extractImageHeight(), secretImageWidth, secretImageHeight);
-            System.err.println("Operation aborted. All carrier images must have dimensions equal to or larger than the secret image.");
-            System.exit(1);
-        }
-    }
-
-    private boolean shouldResizeImage(ImageProcessor carrierImage) {
-        return thresholdValue == SPECIAL_THRESHOLD_VALUE && 
-               (carrierImage.extractImageWidth() != secretImageWidth || 
-                carrierImage.extractImageHeight() != secretImageHeight);
-    }
-
     private byte[][] generateShareValues(int polynomialCount) {
         byte[][] shareValues = new byte[totalShares][polynomialCount];
         
         for (int polynomialIndex = 0; polynomialIndex < polynomialCount; polynomialIndex++) {
-            adjustPolynomialCoefficientsIfNeeded(polynomialIndex);
-            computeShareValuesForPolynomial(polynomialIndex, shareValues);
+            SecretSharingMath.adjustPolynomialCoefficientsIfNeeded(polynomialIndex, scrambledSecretData, 
+                                                                 thresholdValue, totalShares);
+            SecretSharingMath.computeShareValuesForPolynomial(polynomialIndex, shareValues, 
+                                                            scrambledSecretData, thresholdValue, totalShares);
         }
         
         return shareValues;
-    }
-
-    private void adjustPolynomialCoefficientsIfNeeded(int polynomialIndex) {
-        boolean coefficientsAdjusted;
-        do {
-            coefficientsAdjusted = false;
-            for (int shareId = 1; shareId <= totalShares; shareId++) {
-                int evaluationResult = SecretSharingMath.computePolynomialValue(shareId, polynomialIndex, 
-                                                                              scrambledSecretData, thresholdValue) % 
-                                    SecretSharingMath.getModuloValue();
-                
-                if (evaluationResult == MAX_BYTE_VALUE) {
-                    coefficientsAdjusted = reducePolynomialCoefficients(polynomialIndex) || coefficientsAdjusted;
-                }
-            }
-        } while (coefficientsAdjusted);
-    }
-
-    private boolean reducePolynomialCoefficients(int polynomialIndex) {
-        for (int coefficientIndex = 0; coefficientIndex < thresholdValue; coefficientIndex++) {
-            int coefficientPosition = polynomialIndex * thresholdValue + coefficientIndex;
-            int coefficientValue = Byte.toUnsignedInt(scrambledSecretData[coefficientPosition]);
-            
-            if (coefficientValue != 0) {
-                scrambledSecretData[coefficientPosition]--;
-                return true;
-            }
-        }
-        throw new IllegalStateException("Unable to proceed: all polynomial coefficients are zero and cannot be reduced further");
-    }
-
-    private void computeShareValuesForPolynomial(int polynomialIndex, byte[][] shareValues) {
-        for (int shareIndex = 0; shareIndex < totalShares; shareIndex++) {
-            int shareId = shareIndex + 1;
-            int polynomialValue = SecretSharingMath.computePolynomialValue(shareId, polynomialIndex, 
-                                                                          scrambledSecretData, thresholdValue) % 
-                                 SecretSharingMath.getModuloValue();
-            shareValues[shareIndex][polynomialIndex] = (byte) polynomialValue;
-        }
     }
 
     private void embedSharesIntoImages(List<ImageProcessor> carrierImages, byte[][] shareValues, 
