@@ -50,10 +50,10 @@ public class VisualSSS {
         byte[] originalSecretData = secretImageProcessor.retrievePixelData();
         byte[] scrambledSecretData = DataScrambler.scrambleDataWithSeed(randomSeed, originalSecretData);
         
-        SecretSharingDistributor secretDistributor = new SecretSharingDistributor(scrambledSecretData, 
+        SecretSharing secretSharing = new SecretSharing(scrambledSecretData, 
         thresholdParameter, totalSharesParameter, secretImageProcessor.extractImageWidth(),
         secretImageProcessor.extractImageHeight(), secretImageProcessor, workingDirectory);
-        secretDistributor.createShares(randomSeed);
+        secretSharing.createShares(randomSeed);
     }
 
     private static void executeRecovery(String secretFilePath, int thresholdParameter, 
@@ -64,9 +64,9 @@ public class VisualSSS {
         
         FileManager.validateEnoughBmpFiles(workingDirectory, totalSharesParameter, "working directory");
         
-        SecretSharingRecoverer secretRecoverer = new SecretSharingRecoverer(thresholdParameter, totalSharesParameter, workingDirectory);
-        byte[] scrambledSecretData = secretRecoverer.reconstructSecret();
-        short randomSeed = secretRecoverer.extractRandomSeed();
+        SecretSharing secretSharing = new SecretSharing(thresholdParameter, totalSharesParameter, workingDirectory);
+        byte[] scrambledSecretData = secretSharing.reconstructSecret();
+        short randomSeed = secretSharing.extractRandomSeed();
         byte[] originalSecretData = DataScrambler.unscrambleDataWithSeed(randomSeed, scrambledSecretData);
         
         File[] shadowFiles = FileManager.getBmpFilesInDirectory(workingDirectory);
