@@ -16,11 +16,16 @@ public class ImageValidator {
         }
     }
 
-    public static boolean shouldResizeImage(ImageProcessor carrierImage, int thresholdValue, 
-                                          int secretImageWidth, int secretImageHeight) {
-        return thresholdValue == SPECIAL_THRESHOLD_VALUE && 
-               (carrierImage.extractImageWidth() != secretImageWidth || 
-                carrierImage.extractImageHeight() != secretImageHeight);
+    public static void validateExactDimensionsForK8(ImageProcessor carrierImage, String fileName, 
+                                                   int imageIndex, int secretImageWidth, int secretImageHeight) {
+        if (carrierImage.extractImageWidth() != secretImageWidth || 
+            carrierImage.extractImageHeight() != secretImageHeight) {
+            System.err.printf("Carrier image %d (%s) dimensions (%dx%d) do not match secret image dimensions (%dx%d).\n", 
+                            imageIndex + 1, fileName, carrierImage.extractImageWidth(), 
+                            carrierImage.extractImageHeight(), secretImageWidth, secretImageHeight);
+            System.err.println("For k=8, all carrier images must have exactly the same dimensions as the secret image.");
+            System.exit(1);
+        }
     }
 
     public static int calculatePolynomialCount(ImageProcessor referenceShadow, int thresholdValue) {

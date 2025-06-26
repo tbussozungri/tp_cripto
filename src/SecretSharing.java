@@ -97,10 +97,12 @@ public class SecretSharing {
         String fileName = imageFile.getName();
         ImageProcessor carrierImage = new ImageProcessor(imageFile.getAbsolutePath());
         
-        ImageValidator.validateImageDimensions(carrierImage, fileName, imageIndex, secretImageWidth, secretImageHeight);
-        
-        if (ImageValidator.shouldResizeImage(carrierImage, thresholdValue, secretImageWidth, secretImageHeight)) {
-            carrierImage = carrierImage.resizeImage(secretImageWidth, secretImageHeight);
+        if (thresholdValue == SPECIAL_THRESHOLD_VALUE) {
+            // For k=8, require exact dimensions
+            ImageValidator.validateExactDimensionsForK8(carrierImage, fileName, imageIndex, secretImageWidth, secretImageHeight);
+        } else {
+            // For k≠8, require minimum dimensions
+            ImageValidator.validateImageDimensions(carrierImage, fileName, imageIndex, secretImageWidth, secretImageHeight);
         }
         
         return carrierImage;
