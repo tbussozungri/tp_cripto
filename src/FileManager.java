@@ -3,10 +3,6 @@ import java.io.IOException;
 
 public class FileManager {
     
-    public static boolean fileExists(String filePath) {
-        return new File(filePath).exists();
-    }
-
     public static File[] getBmpFilesInDirectory(String directoryPath) {
         File directory = new File(directoryPath);
         File[] bmpFiles = directory.listFiles((dir, name) -> name.toLowerCase().endsWith(".bmp"));
@@ -45,12 +41,6 @@ public class FileManager {
     public static void validateFileExists(String filePath, String fileDescription) {
         if (!new File(filePath).exists()) {
             throw new IllegalArgumentException("File not found: " + fileDescription + " at path " + filePath);
-        }
-    }
-
-    public static void validateFileExtension(String filePath, String expectedExtension, String fileDescription) {
-        if (!filePath.toLowerCase().endsWith(expectedExtension.toLowerCase())) {
-            throw new IllegalArgumentException("Invalid file type: " + fileDescription + " must be a " + expectedExtension + " file");
         }
     }
 

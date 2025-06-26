@@ -10,9 +10,7 @@ public class SecretSharing {
     private static final int MIN_THRESHOLD = 2;
     private static final int MAX_THRESHOLD = 10;
     private static final int MIN_TOTAL_SHARES = 2;
-    private static final int MAX_BYTE_VALUE = 256;
     private static final int SPECIAL_THRESHOLD_VALUE = 8;
-    private static final int ZERO_VALUE = 0;
     
     // BMP header field positions
     private static final int RESERVED_FIELD_1_POSITION = 6;
