@@ -103,7 +103,7 @@ public class SecretSharing {
             carrierImage = carrierImage.resizeImage(secretImageWidth, secretImageHeight);
         }
         
-        return new ImageProcessor(originalSecretImage.retrieveHeader(), carrierImage.retrievePixelData());
+        return carrierImage;
     }
 
     private byte[][] generateShareValues(int polynomialCount) {
