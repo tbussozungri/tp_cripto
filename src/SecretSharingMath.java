@@ -35,10 +35,6 @@ public class SecretSharingMath {
         return currentX < 0 ? currentX + originalModulus : currentX;
     }
 
-    public static int getModuloValue() {
-        return MODULO_VALUE;
-    }
-
     public static void adjustPolynomialCoefficientsIfNeeded(int polynomialIndex, byte[] scrambledSecretData, 
                                                           int thresholdValue, int totalShares) {
         boolean coefficientsAdjusted;
