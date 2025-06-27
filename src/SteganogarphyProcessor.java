@@ -25,7 +25,7 @@ public class SteganogarphyProcessor {
         }
         // General case for hiding data using k bits per pixel
         int totalSecretBits = secretInformation.length * 8;
-        int mask = (1 << k) - 1;
+        int mask = (1 << k) - 1; // Máscara para k bits (por ejemplo, k=3 -> 0b111)
         for (int i = 0; i < alteredImageData.length && currentBitPosition < totalSecretBits; i++) {
             int secretBits = 0;
             for (int bit = 0; bit < k; bit++) {
@@ -48,7 +48,7 @@ public class SteganogarphyProcessor {
         byte[] extractedSecretData = new byte[secretDataLength];
 
         if (k == 8) {
-            // Caso especial: LSB clásico (1 bit por byte)
+            // LSB Replacement
             for (int secretByteIndex = 0; secretByteIndex < secretDataLength; secretByteIndex++) {
                 int reconstructedByteValue = 0;
                 for (int bitOffset = 0; bitOffset < 8; bitOffset++) {
@@ -63,34 +63,23 @@ public class SteganogarphyProcessor {
         }
 
         // General: k bits per pixel
-        int bitPosition = 0;
         int mask = (1 << k) - 1;
-
-        for (int byteIndex = 0; byteIndex < secretDataLength; byteIndex++) {
-            int currentByte = 0;
-
-            for (int bitInByte = 0; bitInByte < 8; bitInByte += k) {
-                int imageIndex = bitPosition / k;
+        int bitWritten = 0;
+        for (int secretByteIndex = 0; secretByteIndex < secretDataLength; secretByteIndex++) {
+            int reconstructedByteValue = 0;
+            for (int bitOffset = 0; bitOffset < 8; bitOffset += k) {
+                int imageIndex = bitWritten / k;
                 if (imageIndex >= hostImageData.length) break;
-
-                int bits = hostImageData[imageIndex] & mask;
-                currentByte = (currentByte << k) | bits;
-
-                bitPosition += k;
+                int secretBits = hostImageData[imageIndex] & mask;
+                int bitsToShift = 8 - k - bitOffset;
+                if (bitsToShift < 0) bitsToShift = 0;
+                reconstructedByteValue |= (secretBits << bitsToShift);
+                bitWritten += k;
             }
-
-            // Si 8 no es múltiplo de k, puede haber que alinear a la izquierda
-            int extraShift = 8 - ((8 / k) * k);
-            if (extraShift > 0) {
-                currentByte <<= extraShift;
-            }
-
-            extractedSecretData[byteIndex] = (byte) currentByte;
+            extractedSecretData[secretByteIndex] = (byte) reconstructedByteValue;
         }
-
         return extractedSecretData;
     }
-
 
     public static byte[][] extractHiddenDataFromShadows(List<ImageProcessor> shadowImages, int polynomialCount, int thresholdValue) {
         byte[][] extractedData = new byte[thresholdValue][polynomialCount];
