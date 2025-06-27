@@ -60,7 +60,7 @@ java -cp build VisualSSS -r -secret secreta.bmp -k 3
 Para facilitar el uso del proyecto, se incluye un Makefile con comandos predefinidos:
 
 ```bash
-# Compilar el proyecto (crea directorios automáticamente)
+# Compilar el proyecto
 make build
 
 # Limpiar archivos generados (build y sombras)
@@ -68,6 +68,9 @@ make clean
 
 # Limpiar solo sombras y archivos recuperados
 make clean-shadows
+
+# Crear directorios necesarios
+make dirs
 
 # Recuperar secreto directamente desde imágenes BMP (k=8, n=8)
 make recover-direct
