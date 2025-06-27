@@ -130,7 +130,7 @@ public class SecretSharing {
     private void embedShareIntoImage(ImageProcessor processedImage, byte[] shareData, 
                                    int shareIndex, int polynomialCount, int randomSeed) throws Exception {
         byte[] imagePixels = processedImage.retrievePixelData();
-        byte[] modifiedPixels = SteganogarphyProcessor.hideSecretData(imagePixels, shareData);
+        byte[] modifiedPixels = SteganogarphyProcessor.hideSecretData(imagePixels, shareData,thresholdValue);
         
         processedImage.updatePixelData(modifiedPixels);
         processedImage.modifyReservedField(RESERVED_FIELD_1_POSITION, (short) randomSeed);
